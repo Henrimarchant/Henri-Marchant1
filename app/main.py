@@ -113,18 +113,18 @@ async def record(
     Build an evidence-backed Building Record.
 
     V0.5 supports UPRN throughout the record architecture while
-    preserving the existing address and coordinate fallbacks.
+    requiring confirmed address identity before public-data enrichment.
     """
 
     try:
         if address:
             geocoded = await geocode(address)
 
-            # Never enrich a named property if the resolver cannot confirm
-            # that the returned candidate matches the user's search.
-            if not geocoded.get("identity_confirmed") and geocoded.get("postcode"):
+            # Hard safety gate: never enrich an address search unless identity
+            # validation passed. Unknown/ambiguous identity must remain unknown.
+            if not geocoded.get("identity_confirmed"):
                 raise ValueError(
-                    "Property identity is not confirmed. Please enter the full building address."
+                    "Property identity is not confirmed. Please enter a full property address including postcode."
                 )
 
             return await build_record(
@@ -135,11 +135,15 @@ async def record(
             )
 
         if lat is not None and lon is not None:
-            return await build_record(
-                address=f"{lat}, {lon}",
-                lat=lat,
-                lon=lon,
-                uprn=uprn,
+            # Raw coordinates are useful internally, but they do not prove
+            # which building/property the user intended. Do not attach
+            # property-specific evidence to them through the public endpoint.
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Coordinates alone do not confirm a property identity. "
+                    "Search using a full property address including postcode."
+                ),
             )
 
         raise HTTPException(
