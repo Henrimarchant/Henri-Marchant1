@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Building Record</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">BUILDING RECORD · V0</div>
+    <h1>Understand a building from its evidence.</h1>
+    <p>Search an England address. Recorded facts stay recorded, estimates stay estimates, and missing evidence stays unknown.</p>
+  </header>
+
+  <form id="search">
+    <input id="address" autocomplete="street-address" placeholder="Enter an address or postcode" required>
+    <button>Build record</button>
+  </form>
+  <div class="demo-line"><button type="button" id="demo">Open demonstration record</button><span>Use this to inspect the product even if a live public-data source is unavailable.</span></div>
+
+  <section id="state" class="hidden"></section>
+  <section id="record" class="hidden">
+    <div class="record-head">
+      <div><span class="label">BUILDING</span><h2 id="record-address"></h2></div>
+      <span class="badge recorded">Recorded</span>
+    </div>
+    <div class="grid">
+      <article><span class="label">IDENTITY</span><div id="identity"></div></article>
+      <article><span class="label">PLANNING & CONSTRAINTS</span><div id="constraints"></div></article>
+      <article><span class="label">KNOWN FACTS</span><div id="facts"></div></article>
+      <article><span class="label">ROOF RECORD</span><div id="roof"></div></article>
+      <article><span class="label">BUILDING HISTORY</span><div id="history"></div></article>
+      <article><span class="label">UNKNOWNS</span><div id="unknowns"></div></article>
+    </div>
+  </section>
+</main>
+<script>
+const form=document.querySelector('#search'), state=document.querySelector('#state'), rec=document.querySelector('#record');
+const row=(k,v,s='recorded')=>`<div class="row"><span>${k}</span><strong>${v ?? 'Unknown'}</strong><em class="${s}">${s}</em></div>`;
+async function loadRecord(url){
+ rec.classList.add('hidden'); state.className=''; state.textContent='Building the evidence record…';
+ try{
+  const r=await fetch(url);
+  const d=await r.json(); if(!r.ok) throw new Error(d.detail||'Search failed');
+  document.querySelector('#record-address').textContent=d.identity.address;
+  document.querySelector('#identity').innerHTML=row('Record ID',d.identity.record_id)+row('GERS ID',d.identity.gers_id,'unknown')+row('Latitude',d.identity.latitude)+row('Longitude',d.identity.longitude);
+  document.querySelector('#facts').innerHTML=d.facts.map(x=>row(x.attribute,x.value,x.status)).join('');
+  document.querySelector('#constraints').innerHTML=d.constraints.length?d.constraints.map(x=>row(x.attribute,x.value,x.status)).join(''):'<p>No records returned. This does not prove no constraints exist.</p>';
+  const roof=(d.components||[]).find(x=>x.component_type==='roof');
+  document.querySelector('#roof').innerHTML=roof?roof.facts.map(x=>row(x.attribute,x.value ?? 'Unknown',x.status)).join(''):'<p>Roof component not resolved.</p>';
+  document.querySelector('#history').innerHTML=(d.history||[]).length?d.history.map(x=>row(x.event_date||'Date unknown',x.description,'recorded')).join(''):'<p>No planning-history records returned. This does not prove no alterations have occurred.</p>';
+  document.querySelector('#unknowns').innerHTML=d.unknowns.map(x=>row(x,'Unknown','unknown')).join('');
+  state.classList.add('hidden'); rec.classList.remove('hidden');
+ }catch(err){state.textContent=err.message;}
+}
+form.addEventListener('submit', e=>{
+ e.preventDefault();
+ loadRecord('/api/record?address='+encodeURIComponent(document.querySelector('#address').value));
+});
+document.querySelector('#demo').addEventListener('click',()=>loadRecord('/api/demo'));
+</script>
+</body>
+</html>
