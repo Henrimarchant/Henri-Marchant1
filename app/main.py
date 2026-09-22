@@ -73,9 +73,14 @@ async def address_search(
                     "uprn": None,
                     "uprn_status": "unknown",
                     "uprn_confidence": None,
+                    "identity_confirmed": result.get("identity_confirmed", False),
+                    "identity_method": result.get("identity_method"),
                     "identity_note": (
-                        "Location resolved. Authoritative UPRN "
-                        "has not yet been matched."
+                        "Location candidate validated against the supplied search. "
+                        "Authoritative UPRN has not yet been matched."
+                        if result.get("identity_confirmed")
+                        else
+                        "A location was resolved, but unique property identity is not yet confirmed."
                     ),
                 }
             ],
@@ -114,6 +119,13 @@ async def record(
     try:
         if address:
             geocoded = await geocode(address)
+
+            # Never enrich a named property if the resolver cannot confirm
+            # that the returned candidate matches the user's search.
+            if not geocoded.get("identity_confirmed") and geocoded.get("postcode"):
+                raise ValueError(
+                    "Property identity is not confirmed. Please enter the full building address."
+                )
 
             return await build_record(
                 address=geocoded["display_name"],
