@@ -3,29 +3,45 @@ import overturemaps
 from shapely import wkb
 from shapely.geometry import Point
 
+
 def _resolve(lat: float, lon: float) -> dict | None:
     # ~100 m search box; deliberately small to minimise transferred data.
     d = 0.001
-    bbox = (lon-d, lat-d, lon+d, lat+d)
-    table = overturemaps.record_batch_reader("building", bbox).read_all().combine_chunks()
+    bbox = (lon - d, lat - d, lon + d, lat + d)
+
+    table = (
+        overturemaps
+        .record_batch_reader("building", bbox)
+        .read_all()
+        .combine_chunks()
+    )
+
     if table.num_rows == 0:
         return None
 
     df = table.to_pandas()
     point = Point(lon, lat)
     candidates = []
+
     for _, r in df.iterrows():
         raw = r.get("geometry")
+
         if raw is None:
             continue
+
         geom = wkb.loads(bytes(raw))
+
         # Prefer the footprint containing the address point; otherwise nearest.
         contains = geom.covers(point)
         distance = geom.distance(point)
-        candidates.append((0 if contains else 1, distance, r, geom))
+
+        candidates.append(
+            (0 if contains else 1, distance, r, geom)
+        )
 
     if not candidates:
         return None
+
     candidates.sort(key=lambda x: (x[0], x[1]))
     _, distance, r, geom = candidates[0]
 
@@ -35,6 +51,7 @@ def _resolve(lat: float, lon: float) -> dict | None:
 
     source = None
     sources = r.get("sources")
+
     if sources is not None:
         try:
             source = sources[0] if len(sources) else None
@@ -54,6 +71,14 @@ def _resolve(lat: float, lon: float) -> dict | None:
         "source": source,
     }
 
+
 async def resolve_building(lat: float, lon: float) -> dict | None:
-    # Overture's reader is synchronous; keep it off FastAPI's event loop.
-    return await asyncio.to_thread(_resolve, lat, lon)
+    # Overture is optional enrichment.
+    # Failure must never prevent the Building Record from being created.
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_resolve, lat, lon),
+            timeout=12,
+        )
+    except Exception:
+        return None
