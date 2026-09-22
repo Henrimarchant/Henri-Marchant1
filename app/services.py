@@ -2,7 +2,7 @@ import hashlib
 import math
 
 from .models import BuildingIdentity, BuildingRecord, EvidenceStatus, Event, Fact, Source
-from .connectors.planning import constraints as get_constraints, listed_buildings, planning_history
+from .connectors.planning import constraints as get_constraints, listed_building_match, planning_history
 from .connectors.overture import resolve_building
 from .roof import build_roof
 
@@ -53,14 +53,16 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
 
     constraint_facts = []
     constraint_entities = await get_constraints(lat, lon, uprn=uprn)
-    listing_entities = [e for e in constraint_entities if e.get("dataset") == "listed-building"]
-    if not listing_entities:
-        listing_entities = await listed_buildings(lat, lon, uprn=uprn)
+    listing = next(
+        (e for e in constraint_entities if e.get("dataset") == "listed-building"),
+        None,
+    )
+    if not listing:
+        listing = await listed_building_match(address, lat, lon, uprn=uprn)
 
     # A positive listing match is explicit. A missing match is deliberately
     # "no confirmed match", not "not listed", because spatial/coverage limitations exist.
-    if listing_entities:
-        listing = listing_entities[0]
+    if listing:
         lsrc = planning_source("listed-building", listing)
         constraint_facts.extend([
             Fact(attribute="Listed building status", value="Listed", status=EvidenceStatus.recorded, confidence=1.0, source=lsrc),
