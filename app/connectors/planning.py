@@ -105,8 +105,23 @@ async def listed_building_match(
             limit=20,
         )
         current = [e for e in exact if not e.get("end-date")]
-        if current:
+        # A spatial lookup can return more than one designation. Never choose
+        # the first one unless there is only one candidate; otherwise use the
+        # conservative name-matching path below.
+        if len(current) == 1:
             return current[0]
+        if len(current) > 1:
+            scored_exact = sorted(
+                ((_name_score(address, entity), entity) for entity in current),
+                key=lambda item: item[0],
+                reverse=True,
+            )
+            if (
+                scored_exact
+                and scored_exact[0][0] >= 0.5
+                and (len(scored_exact) == 1 or scored_exact[0][0] - scored_exact[1][0] >= 0.2)
+            ):
+                return scored_exact[0][1]
     except Exception:
         pass
 
@@ -126,7 +141,11 @@ async def listed_building_match(
         key=lambda item: item[0],
         reverse=True,
     )
-    if scored and scored[0][0] >= 0.5:
+    if (
+        scored
+        and scored[0][0] >= 0.5
+        and (len(scored) == 1 or scored[0][0] - scored[1][0] >= 0.2)
+    ):
         return scored[0][1]
     return None
 
