@@ -27,8 +27,10 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
     overture = await resolve_building(lat, lon)
     identity = BuildingIdentity(
         record_id=stable_record_id(lat, lon, uprn if uprn_status == EvidenceStatus.verified else None), address=address, latitude=lat, longitude=lon,
-        uprn=uprn if uprn_status == EvidenceStatus.verified else None, gers_id=(overture or {}).get("gers_id"), uprn_status=uprn_status,
-        uprn_confidence=uprn_confidence, uprn_source=uprn_source,
+        uprn=uprn if uprn_status == EvidenceStatus.verified else None, gers_id=(overture or {}).get("gers_id"),
+        uprn_status=uprn_status if uprn_status == EvidenceStatus.verified else EvidenceStatus.unknown,
+        uprn_confidence=uprn_confidence if uprn_status == EvidenceStatus.verified else None,
+        uprn_source=uprn_source if uprn_status == EvidenceStatus.verified else None,
     )
     geo_source = Source(provider="Geocoder", dataset="address-resolution",
                         licence_note="Prototype location resolution; strengthen with authoritative property identity.")
