@@ -73,12 +73,6 @@ def _resolve(lat: float, lon: float) -> dict | None:
 
 
 async def resolve_building(lat: float, lon: float) -> dict | None:
-    # Overture is optional enrichment.
-    # Failure must never prevent the Building Record from being created.
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_resolve, lat, lon),
-            timeout=12,
-        )
-    except Exception:
-        return None
+    # Temporarily disabled in V0.
+    # Missing Overture data should be represented as Unknown.
+    return None
