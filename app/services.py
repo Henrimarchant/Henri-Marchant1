@@ -26,8 +26,8 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                        uprn_confidence: float | None = None, uprn_source: Source | None = None) -> BuildingRecord:
     overture = await resolve_building(lat, lon)
     identity = BuildingIdentity(
-        record_id=stable_record_id(lat, lon, uprn), address=address, latitude=lat, longitude=lon,
-        uprn=uprn, gers_id=(overture or {}).get("gers_id"), uprn_status=uprn_status,
+        record_id=stable_record_id(lat, lon, uprn if uprn_status == EvidenceStatus.verified else None), address=address, latitude=lat, longitude=lon,
+        uprn=uprn if uprn_status == EvidenceStatus.verified else None, gers_id=(overture or {}).get("gers_id"), uprn_status=uprn_status,
         uprn_confidence=uprn_confidence, uprn_source=uprn_source,
     )
     geo_source = Source(provider="Geocoder", dataset="address-resolution",
@@ -36,9 +36,13 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
         Fact(attribute="latitude", value=lat, status=EvidenceStatus.recorded, confidence=1.0, source=geo_source),
         Fact(attribute="longitude", value=lon, status=EvidenceStatus.recorded, confidence=1.0, source=geo_source),
     ]
-    if uprn:
-        facts.append(Fact(attribute="UPRN", value=uprn, status=uprn_status, confidence=uprn_confidence,
-                          source=uprn_source, note="Unique Property Reference Number associated with this record."))
+    # Never promote a caller-supplied identifier into evidence unless it has
+    # actually been verified by a trusted resolver.
+    verified_uprn = uprn if uprn and uprn_status == EvidenceStatus.verified else None
+    if verified_uprn:
+        facts.append(Fact(attribute="UPRN", value=verified_uprn, status=EvidenceStatus.verified,
+                          confidence=uprn_confidence, source=uprn_source,
+                          note="Unique Property Reference Number verified for this record."))
 
     if overture:
         osrc = Source(provider="Overture Maps Foundation", dataset="buildings", reference=overture.get("gers_id"))
