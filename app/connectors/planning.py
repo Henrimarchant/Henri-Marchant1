@@ -3,6 +3,8 @@ import re
 
 import httpx
 
+from ..source_status import SourceResult, SourceState
+
 
 ENTITY_BASE = "https://www.planning.data.gov.uk/entity.json"
 
@@ -156,23 +158,23 @@ async def listed_building_match(
     return None
 
 
-async def constraints(
+async def constraints_result(
     lat: float,
     lon: float,
     uprn: str | None = None,
-) -> list[dict]:
-    # Area designations are legitimately established by point/geometry
-    # intersection. A verified UPRN is preferred where available.
+) -> SourceResult:
     try:
-        return await _entity_query(
-            lat=lat,
-            lon=lon,
-            uprn=uprn,
-            datasets=CONSTRAINT_DATASETS,
+        records = await _entity_query(lat=lat, lon=lon, uprn=uprn, datasets=CONSTRAINT_DATASETS)
+        return SourceResult(
+            state=SourceState.success if records else SourceState.no_match,
+            records=records,
+            note=None if records else "No matching records returned; Planning Data coverage varies by area.",
         )
     except Exception:
-        # Retrieval failure is not evidence of absence.
-        return []
+        return SourceResult(
+            state=SourceState.unavailable,
+            note="Planning Data could not be reached; this is not evidence that no constraints exist.",
+        )
 
 
 async def planning_history(
@@ -195,3 +197,8 @@ async def planning_history(
         )
     except Exception:
         return []
+
+
+async def constraints(lat: float, lon: float, uprn: str | None = None) -> list[dict]:
+    """Compatibility wrapper; prefer constraints_result when source state matters."""
+    return (await constraints_result(lat, lon, uprn)).records
