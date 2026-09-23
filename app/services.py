@@ -32,11 +32,13 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
         uprn_confidence=uprn_confidence if uprn_status == EvidenceStatus.verified else None,
         uprn_source=uprn_source if uprn_status == EvidenceStatus.verified else None,
     )
-    geo_source = Source(provider="Geocoder", dataset="address-resolution",
-                        licence_note="Prototype location resolution; strengthen with authoritative property identity.")
+    geo_source = Source(provider="OpenStreetMap / Nominatim", dataset="address-resolution",
+                        licence_note="Location candidate validated against the submitted address; this is not an authoritative UPRN match.")
     facts = [
-        Fact(attribute="latitude", value=lat, status=EvidenceStatus.recorded, confidence=1.0, source=geo_source),
-        Fact(attribute="longitude", value=lon, status=EvidenceStatus.recorded, confidence=1.0, source=geo_source),
+        Fact(attribute="latitude", value=lat, status=EvidenceStatus.recorded, confidence=0.9, source=geo_source,
+             note="Validated geocoder coordinate; property identity is not yet UPRN-verified."),
+        Fact(attribute="longitude", value=lon, status=EvidenceStatus.recorded, confidence=0.9, source=geo_source,
+             note="Validated geocoder coordinate; property identity is not yet UPRN-verified."),
     ]
     # Never promote a caller-supplied identifier into evidence unless it has
     # actually been verified by a trusted resolver.
@@ -107,9 +109,15 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
 
     roof=build_roof(identity.record_id, facts)
     attrs={f.attribute for f in facts}
+    # Evidence gaps are explicit and actionable. They are not claims that the
+    # information does not exist, only that this record has not resolved it yet.
     unknowns=[x for x in [
-        "UPRN","construction date","original construction period","building alteration chronology",
-        "window installation date","drainage condition"
+        "UPRN","building footprint","building use/type","construction date",
+        "original construction period","number of storeys","building height",
+        "gross floor area","external wall construction","window type",
+        "window installation date","roof covering","roof form","roof area",
+        "roof installation/replacement date","drainage condition",
+        "EPC / energy evidence","building alteration chronology"
     ] if x not in attrs]
     return BuildingRecord(identity=identity,facts=facts,constraints=constraint_facts,
                           components=[roof],history=history,unknowns=unknowns)
