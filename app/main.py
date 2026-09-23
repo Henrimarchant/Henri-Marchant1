@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from .connectors.geocoder import geocode
 from .services import build_record
 from .connectors.open_uprn import resolve_uprn, corroborate_uprn
-from .connectors.uprn_postgis import close_pool
+from .connectors.uprn_postgis import close_pool, nearby_uprns_result
 from .models import EvidenceStatus
 from .demo import demo_record
 
@@ -43,6 +43,26 @@ async def health():
     return {
         "status": "ok",
         "version": "0.6.0",
+        "safety": {
+            "postcode_identity_gate": True,
+            "coordinate_only_enrichment": False,
+            "caller_uprn_trusted": False,
+            "spatial_uprn_auto_verified": False,
+        },
+    }
+
+
+@app.get("/ready")
+async def readiness():
+    """Non-secret operational readiness for evidence infrastructure."""
+    uprn = await nearby_uprns_result(53.0, -1.0, 1)
+    return {
+        "status": "ready" if uprn.state.value != "unavailable" else "degraded",
+        "version": "0.6.0",
+        "sources": {
+            "uprn_index": uprn.state.value,
+        },
+        "note": "Readiness reports source availability only; no-match is not treated as an infrastructure failure.",
     }
 
 
