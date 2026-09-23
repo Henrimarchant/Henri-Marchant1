@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 
 from .connectors.geocoder import geocode
 from .services import build_record
-from .connectors.open_uprn import resolve_uprn, corroborate_uprn
+from .connectors.open_uprn import resolve_uprn, corroborate_uprn\nfrom .connectors.uprn_postgis import close_pool
 from .models import EvidenceStatus
 from .demo import demo_record
 
