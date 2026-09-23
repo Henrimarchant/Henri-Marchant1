@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 
 import asyncpg
 
-BATCH_SIZE = 100_000
+BATCH_SIZE = 100_000\nMIN_FREE_SPACE_FACTOR = float(os.getenv("UPRN_MIN_FREE_SPACE_FACTOR", "2.2"))
 MIN_EXPECTED_ROWS = int(os.getenv("UPRN_MIN_EXPECTED_ROWS", "30000000"))
 
 
@@ -30,10 +30,10 @@ async def copy_batch(conn, rows):
     )
 
 
-async def main(path: str):
+def required_free_bytes(path: str) -> int:\n    """Conservative capacity estimate for staging table + index + swap headroom."""\n    return int(os.path.getsize(path) * MIN_FREE_SPACE_FACTOR)\n\n\nasync def main(path: str):
     source_reference = os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)
     release_date = release_date_from_env()
-    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
+    if not os.path.isfile(path):\n        raise RuntimeError(f"UPRN source file not found: {path}")\n    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
         await conn.execute("""CREATE TABLE IF NOT EXISTS dataset_versions(
