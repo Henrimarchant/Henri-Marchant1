@@ -37,3 +37,18 @@ def test_unverified_uprn_must_not_drive_record_id():
 def test_evidence_status_has_unknown_and_conflicting():
     assert EvidenceStatus.unknown.value == "unknown"
     assert EvidenceStatus.conflicting.value == "conflicting"
+
+
+def test_postcode_only_has_no_unique_property_tokens():
+    import re
+    from app.connectors.geocoder import POSTCODE_RE
+    query = "NG25 0PS"
+    assert not POSTCODE_RE.sub("", query).strip(" ,")
+
+
+def test_same_postcode_wrong_name_scores_lower():
+    right = candidate("Normanton Hall, Southwell", "NG25 0PS")
+    wrong = candidate("Another House, Southwell", "NG25 0PS")
+    assert _score("Normanton Hall, NG25 0PS", right, "NG250PS") > _score(
+        "Normanton Hall, NG25 0PS", wrong, "NG250PS"
+    )
