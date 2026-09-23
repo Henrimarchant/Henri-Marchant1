@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 
 from .connectors.geocoder import geocode
 from .services import build_record
+from .connectors.open_uprn import resolve_uprn
 from .demo import demo_record
 
 
@@ -127,13 +128,17 @@ async def record(
                     "Property identity is not confirmed. Please enter a full property address including postcode."
                 )
 
-            # A UPRN supplied by a caller is not evidence. Until an
-            # authoritative resolver verifies it, ignore it completely.
+            # Caller-supplied identifiers are never trusted. The official
+            # OS Open UPRN dataset may verify the validated geocoder point.
+            resolved_uprn = resolve_uprn(geocoded["lat"], geocoded["lon"])
             return await build_record(
                 address=geocoded["display_name"],
                 lat=geocoded["lat"],
                 lon=geocoded["lon"],
-                uprn=None,
+                uprn=resolved_uprn["uprn"] if resolved_uprn else None,
+                uprn_status=resolved_uprn["status"] if resolved_uprn else __import__("app.models", fromlist=["EvidenceStatus"]).EvidenceStatus.unknown,
+                uprn_confidence=resolved_uprn["confidence"] if resolved_uprn else None,
+                uprn_source=resolved_uprn["source"] if resolved_uprn else None,
             )
 
         if lat is not None and lon is not None:
