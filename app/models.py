@@ -53,7 +53,7 @@ class BuildingIdentity(BaseModel):
 class Component(BaseModel):
     component_id: str
     component_type: str
-    facts: list[Fact] = []
+    facts: list[Fact] = Field(default_factory=list)
 
 
 class Event(BaseModel):
@@ -68,8 +68,8 @@ class Event(BaseModel):
 
 class BuildingRecord(BaseModel):
     identity: BuildingIdentity
-    facts: list[Fact] = []
-    constraints: list[Fact] = []
-    components: list[Component] = []
-    history: list[Event] = []
-    unknowns: list[str] = []
+    facts: list[Fact] = Field(default_factory=list)
+    constraints: list[Fact] = Field(default_factory=list)
+    components: list[Component] = Field(default_factory=list)
+    history: list[Event] = Field(default_factory=list)
+    unknowns: list[str] = Field(default_factory=list)
