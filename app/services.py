@@ -145,4 +145,5 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                                   else "recorded" if uprn_status == EvidenceStatus.recorded
                                   else "unknown"
                               ),
+                              "uprn_index": uprn_source_state or "unknown",
                           })
