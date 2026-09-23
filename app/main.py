@@ -33,6 +33,11 @@ async def home(request: Request):
     )
 
 
+@app.on_event("shutdown")
+async def shutdown_connections():
+    await close_pool()
+
+
 @app.get("/health")
 async def health():
     return {
