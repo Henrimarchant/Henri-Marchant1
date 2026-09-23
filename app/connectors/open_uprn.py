@@ -41,31 +41,38 @@ def _load_points() -> list[tuple[str, float, float]]:
     return points
 
 
-async def resolve_uprn(lat: float, lon: float) -> dict | None:
-    # Production path: query the PostGIS spatial index. The local CSV path
-    # remains only as a development fallback.
-    try:
-        from .uprn_postgis import nearby_uprns
-        indexed = await nearby_uprns(lat, lon, 2)
-    except Exception:
-        indexed = []
-    if indexed:
-        nearest = [(float(x["distance_m"]), str(x["uprn"]), float(x["latitude"]), float(x["longitude"])) for x in indexed]
+async def resolve_uprn_result(lat: float, lon: float) -> SourceResult:
+    """Resolve a spatial UPRN candidate without hiding source failure."""
+    from .uprn_postgis import nearby_uprns_result
+
+    indexed_result = await nearby_uprns_result(lat, lon, 2)
+    if indexed_result.state == SourceState.success:
+        nearest = [
+            (float(x["distance_m"]), str(x["uprn"]), float(x["latitude"]), float(x["longitude"]))
+            for x in indexed_result.records
+        ]
     else:
         points = _load_points()
         if not points:
-            return None
+            return indexed_result
         nearest = sorted(
             ((_distance_m(lat, lon, plat, plon), uprn, plat, plon) for uprn, plat, plon in points),
             key=lambda item: item[0],
         )[:2]
+
     if not nearest or nearest[0][0] > MAX_VERIFY_DISTANCE_M:
-        return None
+        return SourceResult(
+            state=SourceState.no_match,
+            note="No UPRN candidate was found within the conservative identity radius.",
+        )
     if len(nearest) > 1 and nearest[1][0] - nearest[0][0] < AMBIGUITY_MARGIN_M:
-        return None
+        return SourceResult(
+            state=SourceState.incomplete,
+            note="Multiple nearby UPRNs are too close to distinguish safely.",
+        )
 
     distance, uprn, plat, plon = nearest[0]
-    return {
+    candidate = {
         "uprn": uprn,
         "latitude": plat,
         "longitude": plon,
@@ -79,14 +86,10 @@ async def resolve_uprn(lat: float, lon: float) -> dict | None:
             licence_note="OS OpenData under the Open Government Licence; OS Open UPRN coordinate candidate. Coordinate proximity alone does not verify address-to-UPRN identity.",
         ),
     }
+    return SourceResult(state=SourceState.success, records=[candidate])
 
 
-async def corroborate_uprn(address: str, candidate: dict | None) -> dict | None:
-    """Keep spatial UPRN candidates recorded until authoritative address linkage exists.
-
-    OS Open UPRN is authoritative for the identifier and coordinate, but it does
-    not contain the postal address. Planning Data search results are not used to
-    promote identity to verified because coverage and entity schemas vary and a
-    text search is not sufficient proof of an address-to-UPRN relationship.
-    """
-    return candidate
+async def resolve_uprn(lat: float, lon: float) -> dict | None:
+    """Compatibility wrapper returning the candidate only."""
+    result = await resolve_uprn_result(lat, lon)
+    return result.records[0] if result.records else None
