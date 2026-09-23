@@ -60,13 +60,13 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                 facts.append(Fact(attribute=label,value=value,unit=unit,status=EvidenceStatus.recorded,source=osrc))
 
     constraint_facts = []
-    constraint_entities = await get_constraints(lat, lon, uprn=uprn)
+    constraint_entities = await get_constraints(lat, lon, uprn=verified_uprn)
     listing = next(
         (e for e in constraint_entities if e.get("dataset") == "listed-building"),
         None,
     )
     if not listing:
-        listing = await listed_building_match(address, lat, lon, uprn=uprn)
+        listing = await listed_building_match(address, lat, lon, uprn=verified_uprn)
 
     # A positive listing match is explicit. A missing match is deliberately
     # "no confirmed match", not "not listed", because spatial/coverage limitations exist.
@@ -97,7 +97,7 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                                      confidence=1.0, source=planning_source(dataset, entity)))
 
     history=[]
-    for index, entity in enumerate(await planning_history(lat, lon, uprn=uprn)):
+    for index, entity in enumerate(await planning_history(lat, lon, uprn=verified_uprn)):
         reference=str(entity.get("reference") or entity.get("entity") or index)
         description=entity.get("name") or entity.get("description") or f"Planning record {reference}"
         event_date=entity.get("entry-date") or entity.get("start-date")
