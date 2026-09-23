@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from .connectors.geocoder import geocode
 from .services import build_record
 from .connectors.open_uprn import resolve_uprn
+from .models import EvidenceStatus
 from .demo import demo_record
 
 
@@ -136,7 +137,7 @@ async def record(
                 lat=geocoded["lat"],
                 lon=geocoded["lon"],
                 uprn=resolved_uprn["uprn"] if resolved_uprn else None,
-                uprn_status=resolved_uprn["status"] if resolved_uprn else __import__("app.models", fromlist=["EvidenceStatus"]).EvidenceStatus.unknown,
+                uprn_status=resolved_uprn["status"] if resolved_uprn else EvidenceStatus.unknown,
                 uprn_confidence=resolved_uprn["confidence"] if resolved_uprn else None,
                 uprn_source=resolved_uprn["source"] if resolved_uprn else None,
             )
