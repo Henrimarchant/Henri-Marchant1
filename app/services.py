@@ -28,10 +28,10 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
     overture = await resolve_building(lat, lon)
     identity = BuildingIdentity(
         record_id=stable_record_id(lat, lon, uprn if uprn_status == EvidenceStatus.verified else None), address=address, latitude=lat, longitude=lon,
-        uprn=uprn if uprn_status == EvidenceStatus.verified else None, gers_id=(overture or {}).get("gers_id"),
-        uprn_status=uprn_status if uprn_status == EvidenceStatus.verified else EvidenceStatus.unknown,
-        uprn_confidence=uprn_confidence if uprn_status == EvidenceStatus.verified else None,
-        uprn_source=uprn_source if uprn_status == EvidenceStatus.verified else None,
+        uprn=uprn if uprn_status in (EvidenceStatus.recorded, EvidenceStatus.verified) else None, gers_id=(overture or {}).get("gers_id"),
+        uprn_status=uprn_status if uprn_status in (EvidenceStatus.recorded, EvidenceStatus.verified) else EvidenceStatus.unknown,
+        uprn_confidence=uprn_confidence if uprn_status in (EvidenceStatus.recorded, EvidenceStatus.verified) else None,
+        uprn_source=uprn_source if uprn_status in (EvidenceStatus.recorded, EvidenceStatus.verified) else None,
     )
     geo_source = Source(provider="OpenStreetMap / Nominatim", dataset="address-resolution",
                         licence_note="Location candidate validated against the submitted address; this is not an authoritative UPRN match.")
@@ -44,6 +44,10 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
     # Never promote a caller-supplied identifier into evidence unless it has
     # actually been verified by a trusted resolver.
     verified_uprn = uprn if uprn and uprn_status == EvidenceStatus.verified else None
+    if uprn and uprn_status == EvidenceStatus.recorded:
+        facts.append(Fact(attribute="UPRN candidate", value=uprn, status=EvidenceStatus.recorded,
+                          confidence=uprn_confidence, source=uprn_source,
+                          note="Nearest unambiguous OS Open UPRN coordinate candidate; not yet verified against an address-linked authoritative source."))
     if verified_uprn:
         facts.append(Fact(attribute="UPRN", value=verified_uprn, status=EvidenceStatus.verified,
                           confidence=uprn_confidence, source=uprn_source,
