@@ -11,3 +11,9 @@ def test_uprn_verification_radius_is_conservative():
 
 def test_ambiguity_margin_is_required():
     assert AMBIGUITY_MARGIN_M >= 4.0
+
+
+def test_coordinate_candidate_not_verified():
+    from app.models import EvidenceStatus
+    # OS Open UPRN supplies identifiers + coordinates, not a full address link.
+    assert EvidenceStatus.recorded != EvidenceStatus.verified
