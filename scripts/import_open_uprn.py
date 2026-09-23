@@ -31,10 +31,18 @@ async def copy_batch(conn, rows):
     )
 
 
-def required_free_bytes(path: str) -> int:\n    """Conservative capacity estimate for staging table + index + swap headroom."""\n    return int(os.path.getsize(path) * MIN_FREE_SPACE_FACTOR)\n\n\nasync def main(path: str):
+def required_free_bytes(path: str) -> int:
+    """Conservative capacity estimate for staging table + index + swap headroom."""
+    return int(os.path.getsize(path) * MIN_FREE_SPACE_FACTOR)
+
+
+async def main(path: str):
     source_reference = os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)
     release_date = release_date_from_env()
-    if not os.path.isfile(path):\n        raise RuntimeError(f"UPRN source file not found: {path}")\n    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])\n    source_bytes = os.path.getsize(path)
+    if not os.path.isfile(path):
+        raise RuntimeError(f"UPRN source file not found: {path}")
+    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
+    source_bytes = os.path.getsize(path)
     try:
         db_size = await conn.fetchval("SELECT pg_database_size(current_database())")
         headroom = await conn.fetchval("SELECT pg_size_pretty($1::bigint)", required_free_bytes(path))
@@ -60,7 +68,8 @@ def required_free_bytes(path: str) -> int:\n    """Conservative capacity estimat
           uprn bigint PRIMARY KEY,
           latitude double precision NOT NULL CHECK(latitude BETWEEN 49 AND 61),
           longitude double precision NOT NULL CHECK(longitude BETWEEN -9 AND 3),
-          geom geometry(Point,4326) GENERATED ALWAYS AS\n            (ST_SetSRID(ST_MakePoint(longitude,latitude),4326)) STORED)""")
+          geom geometry(Point,4326) GENERATED ALWAYS AS
+            (ST_SetSRID(ST_MakePoint(longitude,latitude),4326)) STORED)""")
 
         total = 0
         batch = []
