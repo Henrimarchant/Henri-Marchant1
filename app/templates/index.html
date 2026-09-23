@@ -9,7 +9,7 @@
 <body>
 <main>
   <header>
-    <div class="eyebrow">BUILDING RECORD · V0.5</div>
+    <div class="eyebrow">BUILDING RECORD · V0.6</div>
     <h1>Understand a building from its evidence.</h1>
     <p>Search an England address. Recorded facts stay recorded, estimates stay estimates, and evidence gaps are explained.</p>
   </header>
@@ -34,7 +34,8 @@
 <script>
 const form=document.querySelector('#search'), state=document.querySelector('#state'), rec=document.querySelector('#record');
 const esc=v=>String(v??'Unknown').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const row=(k,v,s='recorded')=>`<div class="row"><span>${esc(k)}</span><strong>${esc(v)}</strong><em class="${esc(s)}">${esc(s)}</em></div>`;
+const row=(k,v,s='recorded',note='',source='')=>`<div class="row"><span>${esc(k)}</span><strong>${esc(v)}</strong><em class="${esc(s)}">${esc(s)}</em>${note?`<small>${esc(note)}</small>`:''}${source?`<small class="source">Source: ${esc(source)}</small>`:''}</div>`;
+const factRow=x=>row(x.attribute,x.value??'Unknown',x.status,x.note||'',x.source?([x.source.provider,x.source.dataset].filter(Boolean).join(' · ')):'');
 async function loadRecord(url){
  rec.classList.add('hidden'); state.className=''; state.textContent='Building the evidence record…';
  try{
@@ -45,17 +46,17 @@ async function loadRecord(url){
     row('UPRN',d.identity.uprn||'Not yet resolved',d.identity.uprn_status||'unknown')+
     row('GERS ID',d.identity.gers_id||'Not currently resolved','unknown')+
     row('Latitude',d.identity.latitude)+row('Longitude',d.identity.longitude);
-  document.querySelector('#facts').innerHTML=d.facts.map(x=>row(x.attribute,x.value,x.status)).join('');
+  document.querySelector('#facts').innerHTML=d.facts.map(factRow).join('');
   document.querySelector('#constraints').innerHTML=d.constraints.length
-    ?d.constraints.map(x=>row(x.attribute,x.value,x.status)).join('')
+    ?d.constraints.map(factRow).join('')
     :'<p>No constraint evidence was returned. Coverage may be incomplete; this is not proof that no constraints apply.</p>';
   const roof=(d.components||[]).find(x=>x.component_type==='roof');
-  document.querySelector('#roof').innerHTML=roof?roof.facts.map(x=>row(x.attribute,x.value??'Unknown',x.status)).join(''):'<p>Roof evidence has not yet been resolved.</p>';
+  document.querySelector('#roof').innerHTML=roof?roof.facts.map(factRow).join(''):'<p>Roof evidence has not yet been resolved.</p>';
   document.querySelector('#history').innerHTML=(d.history||[]).length
     ?d.history.map(x=>row(x.event_date||'Date unknown',x.description,'recorded')).join('')
     :'<p>No planning-history evidence was returned. This is not proof that no alterations have occurred.</p>';
   document.querySelector('#unknowns').innerHTML=(d.unknowns||[]).length
-    ?d.unknowns.map(x=>row(x,'Evidence not yet resolved','unknown')).join('')
+    ?d.unknowns.map(x=>row(x,'Not yet resolved','unknown','No sufficiently reliable evidence has been attached to this record yet.')).join('')
     :'<p>No current evidence gaps in this section.</p>';
   state.classList.add('hidden'); rec.classList.remove('hidden');
  }catch(err){state.textContent=err.message;}
