@@ -83,7 +83,7 @@ async def geocode(address: str) -> dict:
             # Nominatim structured search requires at least one of its address
             # fields; postalcode is valid but some deployments behave better
             # when country is explicit.
-            pc=await _search(client,headers,postalcode=requested_postcode,country="United Kingdom",limit=3)
+            pc=await _search(client,headers,postalcode=requested_postcode,limit=3)
             if not pc:
                 pc=await _search(client,headers,q=requested_postcode,limit=3)
             if pc:
@@ -98,11 +98,14 @@ async def geocode(address: str) -> dict:
                     if q and q not in variants:
                         variants.append(q)
                 local=[]
+                seen=set()
                 for q in variants:
-                    local=await _search(client,headers,q=q,
+                    results=await _search(client,headers,q=q,
                         viewbox=f"{clon-delta},{clat+delta},{clon+delta},{clat-delta}",bounded=1)
-                    if local:
-                        break
+                    for item in results:
+                        key=(item.get("osm_type"),item.get("osm_id"),item.get("place_id"))
+                        if key not in seen:
+                            seen.add(key); local.append(item)
                 scored=[]
                 for item in local:
                     dist=_distance_m(clat,clon,float(item["lat"]),float(item["lon"]))
