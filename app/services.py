@@ -2,7 +2,8 @@ import hashlib
 import math
 
 from .models import BuildingIdentity, BuildingRecord, EvidenceStatus, Event, Fact, Source
-from .connectors.planning import constraints as get_constraints, listed_building_match, planning_history
+from .connectors.planning import constraints_result as get_constraints_result, listed_building_match, planning_history
+from .source_status import SourceState
 from .connectors.overture import resolve_building
 from .roof import build_roof
 
@@ -60,7 +61,8 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                 facts.append(Fact(attribute=label,value=value,unit=unit,status=EvidenceStatus.recorded,source=osrc))
 
     constraint_facts = []
-    constraint_entities = await get_constraints(lat, lon, uprn=verified_uprn)
+    constraint_result = await get_constraints_result(lat, lon, uprn=verified_uprn)
+    constraint_entities = constraint_result.records
     listing = next(
         (e for e in constraint_entities if e.get("dataset") == "listed-building"),
         None,
@@ -80,12 +82,18 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
             Fact(attribute="First listed", value=listing.get("start-date") or "Unknown", status=EvidenceStatus.recorded if listing.get("start-date") else EvidenceStatus.unknown, source=lsrc),
         ])
     else:
+        unavailable = constraint_result.state == SourceState.unavailable
         constraint_facts.append(Fact(
-            attribute="Listed building status", value="No confirmed listing match",
+            attribute="Listed building status",
+            value="Source unavailable" if unavailable else "No confirmed listing match",
             status=EvidenceStatus.unknown,
-            note="No matching listed-building record was returned. This is not proof that the building is not listed.",
+            note=(
+                "Planning Data could not be reached, so listing status was not established."
+                if unavailable else
+                "No matching listed-building record was returned. This is not proof that the building is not listed."
+            ),
             source=Source(provider="Planning Data / Historic England", dataset="listed-building",
-                          licence_note="National listing data is authoritative, but this prototype's property-to-spatial match is not yet authoritative.")
+                          licence_note="National listing data is authoritative, but property matching and source availability must be explicit.")
         ))
 
     for entity in constraint_entities:
