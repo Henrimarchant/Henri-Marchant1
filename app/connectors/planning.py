@@ -177,26 +177,38 @@ async def constraints_result(
         )
 
 
-async def planning_history(
+async def planning_history_result(
     lat: float,
     lon: float,
     uprn: str | None = None,
-) -> list[dict]:
-    """Return property planning history only when an authoritative UPRN exists.
-
-    Coordinate proximity is useful for area context but is not strong enough
-    to claim that a planning application belongs to a particular building.
-    """
+) -> SourceResult:
+    """Return planning history with explicit source/identity state."""
     if not uprn:
-        return []
+        return SourceResult(
+            state=SourceState.incomplete,
+            note="Planning history requires a verified UPRN; coordinate proximity is not treated as property history.",
+        )
     try:
-        return await _entity_query(
+        records = await _entity_query(
             uprn=uprn,
             datasets=["planning-application"],
             limit=100,
         )
+        return SourceResult(
+            state=SourceState.success if records else SourceState.no_match,
+            records=records,
+            note=None if records else "No planning applications were returned for the verified UPRN; national coverage is incomplete.",
+        )
     except Exception:
-        return []
+        return SourceResult(
+            state=SourceState.unavailable,
+            note="Planning application data could not be reached; this is not evidence of no planning history.",
+        )
+
+
+async def planning_history(lat: float, lon: float, uprn: str | None = None) -> list[dict]:
+    """Compatibility wrapper; prefer planning_history_result when source state matters."""
+    return (await planning_history_result(lat, lon, uprn)).records
 
 
 async def constraints(lat: float, lon: float, uprn: str | None = None) -> list[dict]:
