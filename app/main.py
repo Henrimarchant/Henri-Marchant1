@@ -9,8 +9,8 @@ from .demo import demo_record
 
 
 app = FastAPI(
-    title="Building Record V0.5",
-    version="0.5.0",
+    title="Building Record V0.6",
+    version="0.6.0",
 )
 
 app.mount(
@@ -34,7 +34,7 @@ async def home(request: Request):
 async def health():
     return {
         "status": "ok",
-        "version": "0.5.0",
+        "version": "0.6.0",
     }
 
 
@@ -52,7 +52,7 @@ async def address_search(
     ),
 ):
     """
-    V0.5 property-search endpoint.
+    V0.6 property-search endpoint.
 
     For now this retains the existing prototype geocoder.
     It is deliberately separated from record generation so that
@@ -112,7 +112,7 @@ async def record(
     """
     Build an evidence-backed Building Record.
 
-    V0.5 supports UPRN throughout the record architecture while
+    V0.6 supports UPRN throughout the record architecture while
     requiring confirmed address identity before public-data enrichment.
     """
 
@@ -127,11 +127,13 @@ async def record(
                     "Property identity is not confirmed. Please enter a full property address including postcode."
                 )
 
+            # A UPRN supplied by a caller is not evidence. Until an
+            # authoritative resolver verifies it, ignore it completely.
             return await build_record(
                 address=geocoded["display_name"],
                 lat=geocoded["lat"],
                 lon=geocoded["lon"],
-                uprn=uprn,
+                uprn=None,
             )
 
         if lat is not None and lon is not None:
