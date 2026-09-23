@@ -120,7 +120,9 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
             source=Source(provider="Planning Data",dataset="planning-application",reference=reference), confidence=1.0
         ))
 
-    facts=reconcile_facts(facts)\n    constraint_facts=reconcile_facts(constraint_facts)\n    roof=build_roof(identity.record_id, facts)
+    facts=reconcile_facts(facts)
+    constraint_facts=reconcile_facts(constraint_facts)
+    roof=build_roof(identity.record_id, facts)
     attrs={f.attribute for f in facts}
     # Evidence gaps are explicit and actionable. They are not claims that the
     # information does not exist, only that this record has not resolved it yet.
