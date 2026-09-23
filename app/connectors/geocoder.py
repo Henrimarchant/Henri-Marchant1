@@ -62,6 +62,8 @@ async def geocode(address: str) -> dict:
     headers={"User-Agent":"BuildingRecordV0/0.6 (prototype)"}
     requested_postcode=_requested_postcode(address)
     query_without_postcode=POSTCODE_RE.sub("",address).strip(" ,")
+    if not requested_postcode:
+        raise ValueError("Enter the full property address including postcode so the building can be identified safely.")
     if not query_without_postcode:
         raise ValueError("A postcode identifies an area, not a unique property. Enter the full property address.")
 
@@ -107,3 +109,7 @@ async def geocode(address: str) -> dict:
             "osm_type":best.get("osm_type"),"osm_id":best.get("osm_id"),
             "postcode":_candidate_postcode(best) or requested_postcode,
             "identity_confirmed":True,"identity_method":method}
+
+
+# Backwards-compatible explicit name used by identity safety tests/callers.
+geocode_address = geocode
