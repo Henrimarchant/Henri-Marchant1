@@ -12,6 +12,12 @@ CONSTRAINT_DATASETS = [
     "article-4-direction-area",
     "green-belt",
     "tree-preservation-zone",
+    "scheduled-monument",
+    "site-of-special-scientific-interest",
+    "ancient-woodland",
+    "heritage-at-risk",
+    "area-of-outstanding-natural-beauty",
+    "flood-risk-zone",
 ]
 
 
@@ -163,15 +169,8 @@ async def constraints(
             datasets=CONSTRAINT_DATASETS,
         )
     except Exception:
-        if uprn:
-            try:
-                return await _entity_query(
-                    lat=lat,
-                    lon=lon,
-                    datasets=CONSTRAINT_DATASETS,
-                )
-            except Exception:
-                pass
+        # Never silently downgrade a failed precise UPRN lookup to a spatial
+        # lookup: that could attach a neighbouring designation to the property.
         return []
 
 
@@ -180,23 +179,18 @@ async def planning_history(
     lon: float,
     uprn: str | None = None,
 ) -> list[dict]:
+    """Return property planning history only when an authoritative UPRN exists.
+
+    Coordinate proximity is useful for area context but is not strong enough
+    to claim that a planning application belongs to a particular building.
+    """
+    if not uprn:
+        return []
     try:
         return await _entity_query(
-            lat=lat,
-            lon=lon,
             uprn=uprn,
             datasets=["planning-application"],
             limit=100,
         )
     except Exception:
-        if uprn:
-            try:
-                return await _entity_query(
-                    lat=lat,
-                    lon=lon,
-                    datasets=["planning-application"],
-                    limit=100,
-                )
-            except Exception:
-                pass
         return []
