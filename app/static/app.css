@@ -4,3 +4,5 @@
 .demo-line button{height:38px;background:transparent;color:#151816;border:1px solid #cfd4cf;padding:0 14px}
 .demo-line span{font-size:12px;color:#747c77}
 @media(max-width:720px){.demo-line{align-items:flex-start;flex-direction:column;margin-top:-18px}}
+
+.row small{grid-column:1/-1;font-size:11px;line-height:1.35;color:#7a827d}.row small.source{color:#59615c}.estimated{color:#7653a6}.verified{color:#0f6540}.conflicting{color:#a33b2b}
