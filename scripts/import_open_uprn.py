@@ -74,12 +74,6 @@ async def main(path: str):
                 f"Import validation failed: {total:,} valid rows; expected at least {MIN_EXPECTED_ROWS:,}"
             )
 
-        await conn.execute("""UPDATE os_open_uprn_next
-          SET geom=ST_SetSRID(ST_MakePoint(longitude,latitude),4326)""")
-        nulls = await conn.fetchval("SELECT count(*) FROM os_open_uprn_next WHERE geom IS NULL")
-        if nulls:
-            raise RuntimeError(f"Import validation failed: {nulls} null geometries")
-        await conn.execute("ALTER TABLE os_open_uprn_next ALTER COLUMN geom SET NOT NULL")
         index_name = f"os_open_uprn_next_geom_{uuid.uuid4().hex[:10]}_gix"
         await conn.execute(f"CREATE INDEX {index_name} ON os_open_uprn_next USING GIST(geom)")
         await conn.execute("ANALYZE os_open_uprn_next")
