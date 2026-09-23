@@ -60,3 +60,9 @@ def test_address_without_postcode_is_rejected():
     from app.connectors.geocoder import geocode_address
     with pytest.raises(ValueError, match="full property address including postcode"):
         asyncio.run(geocode_address("Normanton Hall, Normanton Road"))
+
+
+def test_source_states_distinguish_failure_from_no_match():
+    from app.source_status import SourceState
+    assert SourceState.unavailable != SourceState.no_match
+    assert SourceState.incomplete != SourceState.success
