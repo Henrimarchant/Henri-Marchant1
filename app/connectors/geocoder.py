@@ -90,7 +90,8 @@ async def geocode(address: str) -> dict:
                 # miss a named building when the full street/locality string is
                 # supplied as an unstructured q value.
                 variants=[]
-                for q in [query_without_postcode, query_without_postcode.split(",")[0].strip()]:
+                parts=[p.strip() for p in query_without_postcode.split(",") if p.strip()]
+                for q in [query_without_postcode, parts[0] if parts else "", ", ".join(parts[:2]) if len(parts)>1 else ""]:
                     if q and q not in variants:
                         variants.append(q)
                 local=[]
@@ -102,8 +103,11 @@ async def geocode(address: str) -> dict:
                 scored=[]
                 for item in local:
                     dist=_distance_m(clat,clon,float(item["lat"]),float(item["lon"]))
-                    name_overlap=len(_tokens(query_without_postcode)&_tokens(str(item.get("display_name") or "")))
-                    name_score=name_overlap/max(min(len(_tokens(query_without_postcode)),4),1)
+                    # Identity name matching should be based on the property
+                    # name/number, not locality words from the full address.
+                    identity_text=parts[0] if parts else query_without_postcode
+                    name_overlap=len(_tokens(identity_text)&_tokens(str(item.get("display_name") or "")))
+                    name_score=name_overlap/max(len(_tokens(identity_text)),1)
                     # postcode centroid is an anchor, not identity: require a
                     # strong name match and a conservative local radius.
                     if dist<=3000 and name_score>=0.5:
