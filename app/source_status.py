@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourceState(str, Enum):
@@ -11,5 +11,5 @@ class SourceState(str, Enum):
 
 class SourceResult(BaseModel):
     state: SourceState
-    records: list[dict] = []
+    records: list[dict] = Field(default_factory=list)
     note: str | None = None
