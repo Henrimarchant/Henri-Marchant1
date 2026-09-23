@@ -93,3 +93,12 @@ async def resolve_uprn(lat: float, lon: float) -> dict | None:
     """Compatibility wrapper returning the candidate only."""
     result = await resolve_uprn_result(lat, lon)
     return result.records[0] if result.records else None
+
+
+async def corroborate_uprn(address: str, candidate: dict | None) -> dict | None:
+    """Do not promote spatial candidates to verified identity.
+
+    The address argument is retained for API compatibility. Verification must
+    come from a future authoritative address-to-UPRN source, not text matching.
+    """
+    return candidate
