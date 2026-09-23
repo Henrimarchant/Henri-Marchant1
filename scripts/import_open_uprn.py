@@ -1,21 +1,39 @@
-"""Atomically import OS Open UPRN CSV into PostGIS.
-
-Loads a staging table with PostgreSQL COPY, validates it, builds the spatial
-index, then swaps it into production. A failed import leaves the live table
-untouched.
-"""
+"""Atomically import the official OS Open UPRN CSV into PostGIS."""
 import asyncio
 import csv
 import os
 import sys
-from datetime import datetime, timezone
+import uuid
+from datetime import date, datetime, timezone
 
 import asyncpg
 
-BATCH_SIZE = 100000\nMIN_EXPECTED_ROWS = int(os.getenv("UPRN_MIN_EXPECTED_ROWS", "30000000"))
+BATCH_SIZE = 100_000
+MIN_EXPECTED_ROWS = int(os.getenv("UPRN_MIN_EXPECTED_ROWS", "30000000"))
 
-async def main(path: str):\n    source_reference=os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)\n    release_date=os.getenv("UPRN_RELEASE_DATE") or None
-    conn=await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
+
+def release_date_from_env() -> date | None:
+    value = os.getenv("UPRN_RELEASE_DATE")
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise RuntimeError("UPRN_RELEASE_DATE must be YYYY-MM-DD") from exc
+
+
+async def copy_batch(conn, rows):
+    await conn.copy_records_to_table(
+        "os_open_uprn_next",
+        records=rows,
+        columns=["uprn", "latitude", "longitude"],
+    )
+
+
+async def main(path: str):
+    source_reference = os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)
+    release_date = release_date_from_env()
+    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
         await conn.execute("""CREATE TABLE IF NOT EXISTS dataset_versions(
@@ -29,50 +47,61 @@ async def main(path: str):\n    source_reference=os.getenv("UPRN_SOURCE_REFERENC
           longitude double precision NOT NULL CHECK(longitude BETWEEN -9 AND 3),
           geom geometry(Point,4326))""")
 
-        total=0
-        batch=[]
-        with open(path,newline="",encoding="utf-8-sig") as handle:
-            for row in csv.DictReader(handle):
+        total = 0
+        batch = []
+        with open(path, newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            required = {"UPRN", "LATITUDE", "LONGITUDE"}
+            if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+                raise RuntimeError("CSV is not an OS Open UPRN supply: required headers are missing")
+            for row in reader:
                 try:
-                    item=(int(row["UPRN"]),float(row["LATITUDE"]),float(row["LONGITUDE"]))
-                except (KeyError,ValueError,TypeError):
+                    item = (int(row["UPRN"]), float(row["LATITUDE"]), float(row["LONGITUDE"]))
+                except (KeyError, ValueError, TypeError):
                     continue
                 batch.append(item)
-                if len(batch)>=BATCH_SIZE:
-                    await copy_batch(conn,batch); total+=len(batch); batch=[]
-                    print(f"loaded {total:,}",flush=True)
+                if len(batch) >= BATCH_SIZE:
+                    await copy_batch(conn, batch)
+                    total += len(batch)
+                    batch = []
+                    print(f"loaded {total:,}", flush=True)
             if batch:
-                await copy_batch(conn,batch); total+=len(batch)
+                await copy_batch(conn, batch)
+                total += len(batch)
 
-        if total < 1_000_000:
-            raise RuntimeError(f"Import validation failed: only {total:,} valid rows")
+        if total < MIN_EXPECTED_ROWS:
+            raise RuntimeError(
+                f"Import validation failed: {total:,} valid rows; expected at least {MIN_EXPECTED_ROWS:,}"
+            )
+
         await conn.execute("""UPDATE os_open_uprn_next
           SET geom=ST_SetSRID(ST_MakePoint(longitude,latitude),4326)""")
-        nulls=await conn.fetchval("SELECT count(*) FROM os_open_uprn_next WHERE geom IS NULL")
+        nulls = await conn.fetchval("SELECT count(*) FROM os_open_uprn_next WHERE geom IS NULL")
         if nulls:
             raise RuntimeError(f"Import validation failed: {nulls} null geometries")
         await conn.execute("ALTER TABLE os_open_uprn_next ALTER COLUMN geom SET NOT NULL")
-        index_name = f"os_open_uprn_next_geom_{uuid.uuid4().hex[:10]}_gix"\n        await conn.execute(f"CREATE INDEX {index_name} ON os_open_uprn_next USING GIST(geom)")
+        index_name = f"os_open_uprn_next_geom_{uuid.uuid4().hex[:10]}_gix"
+        await conn.execute(f"CREATE INDEX {index_name} ON os_open_uprn_next USING GIST(geom)")
         await conn.execute("ANALYZE os_open_uprn_next")
 
         async with conn.transaction():
             await conn.execute("DROP TABLE IF EXISTS os_open_uprn_previous")
-            exists=await conn.fetchval("SELECT to_regclass('public.os_open_uprn') IS NOT NULL")
+            exists = await conn.fetchval("SELECT to_regclass('public.os_open_uprn') IS NOT NULL")
             if exists:
                 await conn.execute("ALTER TABLE os_open_uprn RENAME TO os_open_uprn_previous")
             await conn.execute("ALTER TABLE os_open_uprn_next RENAME TO os_open_uprn")
-            await conn.execute("""INSERT INTO dataset_versions(provider,dataset,retrieved_at,source_reference,licence,row_count)
-              VALUES($1,$2,$3,$4,$5,$6)""","Ordnance Survey","OS Open UPRN",
-              datetime.now(timezone.utc),os.path.basename(path),"Open Government Licence",total)
-        print(f"complete: {total:,} rows; live table swapped atomically",flush=True)
+            await conn.execute("""INSERT INTO dataset_versions(
+              provider,dataset,release_date,retrieved_at,source_reference,licence,row_count)
+              VALUES($1,$2,$3,$4,$5,$6,$7)""",
+              "Ordnance Survey", "OS Open UPRN", release_date,
+              datetime.now(timezone.utc), source_reference,
+              "Open Government Licence", total)
+        print(f"complete: {total:,} rows; live table swapped atomically", flush=True)
     finally:
         await conn.close()
 
-async def copy_batch(conn,rows):
-    await conn.copy_records_to_table("os_open_uprn_next",
-        records=rows,columns=["uprn","latitude","longitude"])
 
-if __name__=="__main__":
-    if len(sys.argv)!=2:
-        raise SystemExit("Pass the OS Open UPRN CSV path")
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("Pass the official OS Open UPRN CSV path")
     asyncio.run(main(sys.argv[1]))
