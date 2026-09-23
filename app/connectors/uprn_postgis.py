@@ -15,6 +15,8 @@ ON os_open_uprn USING GIST (geom);
 """
 import os
 
+_pool = None
+
 try:
     import asyncpg
 except ImportError:  # deployment remains usable until DB dependency is installed
@@ -25,11 +27,20 @@ MAX_VERIFY_DISTANCE_M = 12.0
 AMBIGUITY_MARGIN_M = 4.0
 
 
-async def nearby_uprns(lat: float, lon: float, limit: int = 2) -> list[dict]:
+async def _get_pool():
+    global _pool
     if not DATABASE_URL or asyncpg is None:
+        return None
+    if _pool is None:
+        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5, command_timeout=10)
+    return _pool
+
+
+async def nearby_uprns(lat: float, lon: float, limit: int = 2) -> list[dict]:
+    pool = await _get_pool()
+    if pool is None:
         return []
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT uprn, latitude, longitude,
@@ -49,5 +60,3 @@ async def nearby_uprns(lat: float, lon: float, limit: int = 2) -> list[dict]:
             lat, lon, MAX_VERIFY_DISTANCE_M, limit,
         )
         return [dict(row) for row in rows]
-    finally:
-        await conn.close()
