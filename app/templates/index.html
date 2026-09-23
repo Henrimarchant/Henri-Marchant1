@@ -27,7 +27,7 @@
       <article><span class="label">KNOWN FACTS</span><div id="facts"></div></article>
       <article><span class="label">ROOF RECORD</span><div id="roof"></div></article>
       <article><span class="label">BUILDING HISTORY</span><div id="history"></div></article>
-      <article><span class="label">EVIDENCE GAPS</span><div id="unknowns"></div></article>
+      <article><span class="label">EVIDENCE GAPS</span><div id="unknowns"></div></article>\n      <article><span class="label">SOURCE STATUS</span><div id="sources"></div></article>
     </div>
   </section>
 </main>
@@ -55,6 +55,10 @@ async function loadRecord(url){
   document.querySelector('#history').innerHTML=(d.history||[]).length
     ?d.history.map(x=>row(x.event_date||'Date unknown',x.description,'recorded')).join('')
     :'<p>No planning-history evidence was returned. This is not proof that no alterations have occurred.</p>';
+  const sourceStates=d.source_states||{};
+  document.querySelector('#sources').innerHTML=Object.keys(sourceStates).length
+    ?Object.entries(sourceStates).map(([k,v])=>row(k.replaceAll('_',' '),v,v==='success'?'verified':'unknown')).join('')
+    :'<p>No external source status has been reported.</p>';
   document.querySelector('#unknowns').innerHTML=(d.unknowns||[]).length
     ?d.unknowns.map(x=>row(x,'Not yet resolved','unknown','No sufficiently reliable evidence has been attached to this record yet.')).join('')
     :'<p>No current evidence gaps in this section.</p>';
