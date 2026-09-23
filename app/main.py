@@ -167,6 +167,7 @@ async def record(
                 uprn_status=resolved_uprn["status"] if resolved_uprn else EvidenceStatus.unknown,
                 uprn_confidence=resolved_uprn["confidence"] if resolved_uprn else None,
                 uprn_source=resolved_uprn["source"] if resolved_uprn else None,
+                uprn_source_state=uprn_result.state.value,
             )
 
         if lat is not None and lon is not None:
