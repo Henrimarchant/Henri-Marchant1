@@ -40,17 +40,24 @@ def _load_points() -> list[tuple[str, float, float]]:
     return points
 
 
-def resolve_uprn(lat: float, lon: float) -> dict | None:
-    points = _load_points()
-    if not points:
-        return None
-
-    # Simple V0.6 verifier. The dataset can later be spatially indexed without
-    # changing the evidence contract.
-    nearest = sorted(
-        ((_distance_m(lat, lon, plat, plon), uprn, plat, plon) for uprn, plat, plon in points),
-        key=lambda item: item[0],
-    )[:2]
+async def resolve_uprn(lat: float, lon: float) -> dict | None:
+    # Production path: query the PostGIS spatial index. The local CSV path
+    # remains only as a development fallback.
+    try:
+        from .uprn_postgis import nearby_uprns
+        indexed = await nearby_uprns(lat, lon, 2)
+    except Exception:
+        indexed = []
+    if indexed:
+        nearest = [(float(x["distance_m"]), str(x["uprn"]), float(x["latitude"]), float(x["longitude"])) for x in indexed]
+    else:
+        points = _load_points()
+        if not points:
+            return None
+        nearest = sorted(
+            ((_distance_m(lat, lon, plat, plon), uprn, plat, plon) for uprn, plat, plon in points),
+            key=lambda item: item[0],
+        )[:2]
     if not nearest or nearest[0][0] > MAX_VERIFY_DISTANCE_M:
         return None
     if len(nearest) > 1 and nearest[1][0] - nearest[0][0] < AMBIGUITY_MARGIN_M:
