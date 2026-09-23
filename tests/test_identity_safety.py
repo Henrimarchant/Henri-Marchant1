@@ -52,3 +52,11 @@ def test_same_postcode_wrong_name_scores_lower():
     assert _score("Normanton Hall, NG25 0PS", right, "NG250PS") > _score(
         "Normanton Hall, NG25 0PS", wrong, "NG250PS"
     )
+
+
+def test_address_without_postcode_is_rejected():
+    import asyncio
+    import pytest
+    from app.connectors.geocoder import geocode_address
+    with pytest.raises(ValueError, match="full property address including postcode"):
+        asyncio.run(geocode_address("Normanton Hall, Normanton Road"))
