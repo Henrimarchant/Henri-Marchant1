@@ -1,3 +1,4 @@
+import math
 import re
 
 import httpx
@@ -22,106 +23,87 @@ def _candidate_postcode(item: dict) -> str | None:
 
 
 def _tokens(value: str) -> set[str]:
-    stop = {
-        "the", "and", "of", "road", "street", "lane", "close", "drive",
-        "avenue", "england", "united", "kingdom", "uk",
-    }
-    return {
-        token for token in re.findall(r"[a-z0-9]+", value.lower())
-        if len(token) > 2 and token not in stop and not POSTCODE_RE.fullmatch(token)
-    }
+    stop = {"the","and","of","road","street","lane","close","drive","avenue",
+            "england","united","kingdom","uk"}
+    return {t for t in re.findall(r"[a-z0-9]+", value.lower()) if len(t)>2 and t not in stop}
 
 
 def _score(query: str, item: dict, requested_postcode: str | None) -> float:
     candidate_postcode = _candidate_postcode(item)
     if requested_postcode and candidate_postcode != requested_postcode:
         return -100.0
-
     query_tokens = _tokens(POSTCODE_RE.sub("", query))
-    candidate_text = " ".join([
-        str(item.get("display_name") or ""),
-        " ".join(str(v) for v in (item.get("address") or {}).values()),
-    ])
-    candidate_tokens = _tokens(candidate_text)
-    overlap = len(query_tokens & candidate_tokens)
-    name_score = overlap / max(min(len(query_tokens), 4), 1) if query_tokens else 0.0
+    candidate_text = " ".join([str(item.get("display_name") or ""),
+        " ".join(str(v) for v in (item.get("address") or {}).values())])
+    overlap = len(query_tokens & _tokens(candidate_text))
+    name_score = overlap / max(min(len(query_tokens),4),1) if query_tokens else 0.0
+    kind_bonus = 0.15 if str(item.get("type") or "") in {"house","building","residential","apartments","yes"} else 0.0
+    return name_score + kind_bonus + min(float(item.get("importance") or 0.0),1.0)*0.05
 
-    # Prefer address/building-like candidates over broad administrative places.
-    kind = str(item.get("type") or "")
-    kind_bonus = 0.15 if kind in {"house", "building", "residential", "apartments", "yes"} else 0.0
-    importance = float(item.get("importance") or 0.0)
-    return name_score + kind_bonus + min(importance, 1.0) * 0.05
+
+def _distance_m(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
+    r=6371000.0
+    p1,p2=math.radians(a_lat),math.radians(b_lat)
+    dp=math.radians(b_lat-a_lat); dl=math.radians(b_lon-a_lon)
+    h=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2*r*math.asin(math.sqrt(h))
+
+
+async def _search(client, headers, **params):
+    base={"format":"jsonv2","limit":10,"addressdetails":1,"countrycodes":"gb"}
+    base.update(params)
+    response=await client.get(NOMINATIM,params=base,headers=headers)
+    response.raise_for_status()
+    return response.json()
 
 
 async def geocode(address: str) -> dict:
-    """
-    Resolve a search to a location without blindly trusting the first result.
-
-    If the user supplies a postcode, candidates with a different postcode are
-    rejected. Named-property searches must also have a meaningful textual
-    match. If identity is ambiguous, fail closed instead of enriching the
-    wrong building.
-    """
-    headers = {"User-Agent": "BuildingRecordV0/0.5 (prototype)"}
-    requested_postcode = _requested_postcode(address)
-    params = {
-        "q": address,
-        "format": "jsonv2",
-        "limit": 10,
-        "addressdetails": 1,
-        "countrycodes": "gb",
-    }
+    """Resolve a property conservatively, using postcode as a spatial anchor."""
+    headers={"User-Agent":"BuildingRecordV0/0.6 (prototype)"}
+    requested_postcode=_requested_postcode(address)
+    query_without_postcode=POSTCODE_RE.sub("",address).strip(" ,")
+    if not query_without_postcode:
+        raise ValueError("A postcode identifies an area, not a unique property. Enter the full property address.")
 
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(NOMINATIM, params=params, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        data=await _search(client,headers,q=address)
 
-    if not data:
-        raise ValueError("Property could not be identified from that search.")
+        # First accept only candidates carrying the requested postcode.
+        ranked=sorted(((_score(address,x,requested_postcode),x) for x in data),
+                      key=lambda p:p[0],reverse=True)
+        valid=[p for p in ranked if p[0]>=0.25]
 
-    ranked = sorted(
-        ((_score(address, item, requested_postcode), item) for item in data),
-        key=lambda pair: pair[0],
-        reverse=True,
-    )
-    ranked = [pair for pair in ranked if pair[0] > -50]
+        # Some named buildings do not carry a postcode in OSM. Anchor a second
+        # search tightly around the postcode rather than accepting a same-name
+        # building elsewhere in Britain.
+        method="exact-postcode-candidate"
+        if not valid and requested_postcode:
+            pc=await _search(client,headers,q=requested_postcode,limit=3)
+            if pc:
+                centre=pc[0]; clat=float(centre["lat"]); clon=float(centre["lon"])
+                delta=0.03
+                local=await _search(client,headers,q=query_without_postcode,
+                    viewbox=f"{clon-delta},{clat+delta},{clon+delta},{clat-delta}",bounded=1)
+                scored=[]
+                for item in local:
+                    dist=_distance_m(clat,clon,float(item["lat"]),float(item["lon"]))
+                    name_overlap=len(_tokens(query_without_postcode)&_tokens(str(item.get("display_name") or "")))
+                    name_score=name_overlap/max(min(len(_tokens(query_without_postcode)),4),1)
+                    # postcode centroid is an anchor, not identity: require a
+                    # strong name match and a conservative local radius.
+                    if dist<=3000 and name_score>=0.5:
+                        scored.append((name_score + max(0,1-dist/3000)*0.1,item))
+                valid=sorted(scored,key=lambda p:p[0],reverse=True)
+                method="postcode-anchored-name-match"
 
-    if not ranked:
-        raise ValueError(
-            "Property identity could not be confirmed: returned locations did not match the supplied postcode."
-        )
+        if not valid:
+            raise ValueError("Property identity could not be confirmed reliably from the supplied address.")
 
-    best_score, best = ranked[0]
+        best_score,best=valid[0]
+        if len(valid)>1 and best_score-valid[1][0]<0.08 and best.get("display_name")!=valid[1][1].get("display_name"):
+            raise ValueError("More than one property matches this search. Add more address detail.")
 
-    # A postcode-only query can legitimately identify only the postcode area,
-    # not a unique property. Keep it usable, but mark it unconfirmed.
-    query_without_postcode = POSTCODE_RE.sub("", address).strip(" ,")
-    named_search = bool(query_without_postcode)
-
-    if named_search and best_score < 0.25:
-        raise ValueError(
-            "Property identity could not be confirmed reliably. Add the full property address."
-        )
-
-    # If two materially different candidates are essentially tied, do not guess.
-    if len(ranked) > 1 and abs(best_score - ranked[1][0]) < 0.03:
-        first = best.get("display_name")
-        second = ranked[1][1].get("display_name")
-        if first != second:
-            raise ValueError(
-                "More than one property matches this search. Add the full address so the correct building can be confirmed."
-            )
-
-    return {
-        "display_name": best["display_name"],
-        "lat": float(best["lat"]),
-        "lon": float(best["lon"]),
-        "osm_type": best.get("osm_type"),
-        "osm_id": best.get("osm_id"),
-        "postcode": _candidate_postcode(best),
-        "identity_confirmed": named_search and (
-            not requested_postcode or _candidate_postcode(best) == requested_postcode
-        ),
-        "identity_method": "validated-geocoder-candidate",
-    }
+    return {"display_name":best["display_name"],"lat":float(best["lat"]),"lon":float(best["lon"]),
+            "osm_type":best.get("osm_type"),"osm_id":best.get("osm_id"),
+            "postcode":_candidate_postcode(best) or requested_postcode,
+            "identity_confirmed":True,"identity_method":method}
