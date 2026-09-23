@@ -30,7 +30,7 @@ def _tokens(value: str) -> set[str]:
 
 def _score(query: str, item: dict, requested_postcode: str | None) -> float:
     candidate_postcode = _candidate_postcode(item)
-    if requested_postcode and candidate_postcode != requested_postcode:
+    if requested_postcode and candidate_postcode and candidate_postcode != requested_postcode:
         return -100.0
     query_tokens = _tokens(POSTCODE_RE.sub("", query))
     candidate_text = " ".join([str(item.get("display_name") or ""),
