@@ -92,3 +92,31 @@ def test_coordinate_only_record_request_is_rejected():
     from app.main import app
     response=TestClient(app).get("/api/record",params={"lat":53.0,"lon":-1.0})
     assert response.status_code == 422
+
+
+def test_readiness_degrades_when_uprn_index_is_incomplete(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as main
+    from app.source_status import SourceResult, SourceState
+
+    async def incomplete(*args, **kwargs):
+        return SourceResult(state=SourceState.incomplete, note="not configured")
+
+    monkeypatch.setattr(main, "nearby_uprns_result", incomplete)
+    payload = TestClient(main.app).get("/ready").json()
+    assert payload["status"] == "degraded"
+    assert payload["sources"]["uprn_index"] == "incomplete"
+
+
+def test_readiness_accepts_operational_no_match(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as main
+    from app.source_status import SourceResult, SourceState
+
+    async def no_match(*args, **kwargs):
+        return SourceResult(state=SourceState.no_match)
+
+    monkeypatch.setattr(main, "nearby_uprns_result", no_match)
+    payload = TestClient(main.app).get("/ready").json()
+    assert payload["status"] == "ready"
+    assert payload["sources"]["uprn_index"] == "no_match"
