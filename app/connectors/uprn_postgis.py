@@ -15,6 +15,8 @@ ON os_open_uprn USING GIST (geom);
 """
 import os
 
+from ..source_status import SourceResult, SourceState
+
 _pool = None
 
 try:
