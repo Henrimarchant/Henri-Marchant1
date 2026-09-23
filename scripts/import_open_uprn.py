@@ -8,7 +8,8 @@ from datetime import date, datetime, timezone
 
 import asyncpg
 
-BATCH_SIZE = 100_000\nMIN_FREE_SPACE_FACTOR = float(os.getenv("UPRN_MIN_FREE_SPACE_FACTOR", "2.2"))
+BATCH_SIZE = 100_000
+MIN_FREE_SPACE_FACTOR = float(os.getenv("UPRN_MIN_FREE_SPACE_FACTOR", "2.2"))
 MIN_EXPECTED_ROWS = int(os.getenv("UPRN_MIN_EXPECTED_ROWS", "30000000"))
 
 
