@@ -33,8 +33,22 @@ async def copy_batch(conn, rows):
 def required_free_bytes(path: str) -> int:\n    """Conservative capacity estimate for staging table + index + swap headroom."""\n    return int(os.path.getsize(path) * MIN_FREE_SPACE_FACTOR)\n\n\nasync def main(path: str):
     source_reference = os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)
     release_date = release_date_from_env()
-    if not os.path.isfile(path):\n        raise RuntimeError(f"UPRN source file not found: {path}")\n    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
+    if not os.path.isfile(path):\n        raise RuntimeError(f"UPRN source file not found: {path}")\n    conn = await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])\n    source_bytes = os.path.getsize(path)
     try:
+        db_size = await conn.fetchval("SELECT pg_database_size(current_database())")
+        headroom = await conn.fetchval("SELECT pg_size_pretty($1::bigint)", required_free_bytes(path))
+        print(
+            f"preflight: source={source_bytes:,} bytes; database={db_size:,} bytes; "
+            f"recommended free headroom={headroom}",
+            flush=True,
+        )
+        if os.getenv("UPRN_IMPORT_CAPACITY_CONFIRMED") != "1":
+            raise RuntimeError(
+                "National import blocked until storage capacity is explicitly confirmed. "
+                "Set UPRN_IMPORT_CAPACITY_CONFIRMED=1 only after verifying the persistent volume "
+                f"has at least {required_free_bytes(path):,} bytes of free import headroom."
+            )
+
         await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
         await conn.execute("""CREATE TABLE IF NOT EXISTS dataset_versions(
           provider text NOT NULL, dataset text NOT NULL, release_date date,
