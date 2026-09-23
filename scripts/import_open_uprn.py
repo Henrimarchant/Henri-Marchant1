@@ -12,9 +12,9 @@ from datetime import datetime, timezone
 
 import asyncpg
 
-BATCH_SIZE = 100000
+BATCH_SIZE = 100000\nMIN_EXPECTED_ROWS = int(os.getenv("UPRN_MIN_EXPECTED_ROWS", "30000000"))
 
-async def main(path: str):
+async def main(path: str):\n    source_reference=os.getenv("UPRN_SOURCE_REFERENCE") or os.path.basename(path)\n    release_date=os.getenv("UPRN_RELEASE_DATE") or None
     conn=await asyncpg.connect(os.environ["UPRN_DATABASE_URL"])
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
@@ -52,7 +52,7 @@ async def main(path: str):
         if nulls:
             raise RuntimeError(f"Import validation failed: {nulls} null geometries")
         await conn.execute("ALTER TABLE os_open_uprn_next ALTER COLUMN geom SET NOT NULL")
-        await conn.execute("CREATE INDEX os_open_uprn_next_geom_gix ON os_open_uprn_next USING GIST(geom)")
+        index_name = f"os_open_uprn_next_geom_{uuid.uuid4().hex[:10]}_gix"\n        await conn.execute(f"CREATE INDEX {index_name} ON os_open_uprn_next USING GIST(geom)")
         await conn.execute("ANALYZE os_open_uprn_next")
 
         async with conn.transaction():
