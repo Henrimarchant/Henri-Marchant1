@@ -73,7 +73,7 @@ async def geocode(address: str) -> dict:
         # First accept only candidates carrying the requested postcode.
         ranked=sorted(((_score(address,x,requested_postcode),x) for x in data),
                       key=lambda p:p[0],reverse=True)
-        valid=[p for p in ranked if p[0]>=0.25]
+        valid=[p for p in ranked if p[0]>=0.25 and (_candidate_postcode(p[1]) == requested_postcode)]
 
         # Some named buildings do not carry a postcode in OSM. Anchor a second
         # search tightly around the postcode rather than accepting a same-name
