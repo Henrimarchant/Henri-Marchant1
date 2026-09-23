@@ -78,3 +78,42 @@ async def resolve_uprn(lat: float, lon: float) -> dict | None:
             licence_note="OS OpenData under the Open Government Licence; OS Open UPRN coordinate candidate. Coordinate proximity alone does not verify address-to-UPRN identity.",
         ),
     }
+
+
+async def corroborate_uprn(address: str, candidate: dict | None) -> dict | None:
+    """Corroborate a coordinate candidate against an address-linked public source.
+
+    Planning Data supports UPRN/postcode search but coverage is incomplete.
+    A positive address-token match can upgrade the candidate; absence cannot.
+    """
+    if not candidate:
+        return None
+    import re
+    import httpx
+    uprn = str(candidate["uprn"])
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://www.planning.data.gov.uk/entity.json",
+                                 params={"q": uprn, "limit": 50})
+            r.raise_for_status()
+            entities = r.json().get("entities", [])
+    except Exception:
+        return candidate
+
+    stop={"the","and","road","street","lane","avenue","close","drive","england","united","kingdom"}
+    wanted={x for x in re.findall(r"[a-z0-9]+", address.lower()) if len(x)>2 and x not in stop}
+    for entity in entities:
+        text=" ".join(str(entity.get(k) or "") for k in ("name","address-text","description","reference")).lower()
+        got={x for x in re.findall(r"[a-z0-9]+", text) if len(x)>2 and x not in stop}
+        if wanted and len(wanted & got) / min(len(wanted), 4) >= 0.75:
+            upgraded=dict(candidate)
+            upgraded["status"]=EvidenceStatus.verified
+            upgraded["confidence"]=0.98
+            upgraded["source"]=Source(
+                provider="Ordnance Survey + Planning Data",
+                dataset="OS Open UPRN / address-linked corroboration",
+                reference=uprn,
+                licence_note="UPRN coordinate candidate corroborated against an address-linked Planning Data entity."
+            )
+            return upgraded
+    return candidate
