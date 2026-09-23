@@ -111,7 +111,8 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
                                      confidence=1.0, source=planning_source(dataset, entity)))
 
     history=[]
-    for index, entity in enumerate(await planning_history(lat, lon, uprn=verified_uprn)):
+    history_result = await planning_history_result(lat, lon, uprn=verified_uprn)
+    for index, entity in enumerate(history_result.records):
         reference=str(entity.get("reference") or entity.get("entity") or index)
         description=entity.get("name") or entity.get("description") or f"Planning record {reference}"
         event_date=entity.get("entry-date") or entity.get("start-date")
