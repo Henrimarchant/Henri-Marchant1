@@ -2,7 +2,7 @@ import hashlib
 import math
 
 from .models import BuildingIdentity, BuildingRecord, EvidenceStatus, Event, Fact, Source
-from .connectors.planning import constraints_result as get_constraints_result, listed_building_match, planning_history
+from .connectors.planning import constraints_result as get_constraints_result, listed_building_match, planning_history_result
 from .source_status import SourceState
 from .connectors.overture import resolve_building
 from .roof import build_roof
@@ -136,4 +136,4 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
     ] if x not in attrs]
     return BuildingRecord(identity=identity,facts=facts,constraints=constraint_facts,
                           components=[roof],history=history,unknowns=unknowns,
-                          source_states={"planning_constraints": constraint_result.state.value})
+                          source_states={"planning_constraints": constraint_result.state.value,\n                                         "planning_history": history_result.state.value,\n                                         "uprn_identity": ("verified" if uprn_status == EvidenceStatus.verified else "recorded" if uprn_status == EvidenceStatus.recorded else "unknown")})
