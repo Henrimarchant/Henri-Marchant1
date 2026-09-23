@@ -69,12 +69,12 @@ async def resolve_uprn(lat: float, lon: float) -> dict | None:
         "latitude": plat,
         "longitude": plon,
         "distance_m": round(distance, 2),
-        "status": EvidenceStatus.verified,
-        "confidence": 0.98,
+        "status": EvidenceStatus.recorded,
+        "confidence": 0.85,
         "source": Source(
             provider="Ordnance Survey",
             dataset="OS Open UPRN",
             reference=uprn,
-            licence_note="OS OpenData under the Open Government Licence; UPRN coordinate match verified conservatively.",
+            licence_note="OS OpenData under the Open Government Licence; OS Open UPRN coordinate candidate. Coordinate proximity alone does not verify address-to-UPRN identity.",
         ),
     }
