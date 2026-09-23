@@ -4,7 +4,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from ..models import EvidenceStatus, Source
+from ..models import EvidenceStatus, Source\nfrom ..source_status import SourceResult, SourceState
 
 DATA_PATH = Path(os.getenv("OS_OPEN_UPRN_CSV", "data/os-open-uprn.csv"))
 MAX_VERIFY_DISTANCE_M = 12.0
