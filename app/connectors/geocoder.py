@@ -80,12 +80,15 @@ async def geocode(address: str) -> dict:
         # building elsewhere in Britain.
         method="exact-postcode-candidate"
         if not valid and requested_postcode:
-            pc=await _search(client,headers,postalcode=requested_postcode,limit=3)
+            # Nominatim structured search requires at least one of its address
+            # fields; postalcode is valid but some deployments behave better
+            # when country is explicit.
+            pc=await _search(client,headers,postalcode=requested_postcode,country="United Kingdom",limit=3)
             if not pc:
                 pc=await _search(client,headers,q=requested_postcode,limit=3)
             if pc:
                 centre=pc[0]; clat=float(centre["lat"]); clon=float(centre["lon"])
-                delta=0.03
+                delta=0.06
                 # Try progressively simpler property-name variants. Nominatim can
                 # miss a named building when the full street/locality string is
                 # supplied as an unstructured q value.
@@ -110,8 +113,8 @@ async def geocode(address: str) -> dict:
                     name_score=name_overlap/max(len(_tokens(identity_text)),1)
                     # postcode centroid is an anchor, not identity: require a
                     # strong name match and a conservative local radius.
-                    if dist<=3000 and name_score>=0.5:
-                        scored.append((name_score + max(0,1-dist/3000)*0.1,item))
+                    if dist<=6000 and name_score>=0.5:
+                        scored.append((name_score + max(0,1-dist/6000)*0.1,item))
                 valid=sorted(scored,key=lambda p:p[0],reverse=True)
                 method="postcode-anchored-name-match"
 
