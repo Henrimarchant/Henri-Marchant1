@@ -25,7 +25,7 @@ def planning_source(dataset: str, entity: dict) -> Source:
 
 async def build_record(address: str, lat: float, lon: float, uprn: str | None = None,
                        uprn_status: EvidenceStatus = EvidenceStatus.unknown,
-                       uprn_confidence: float | None = None, uprn_source: Source | None = None) -> BuildingRecord:
+                       uprn_confidence: float | None = None, uprn_source: Source | None = None,\n                       uprn_source_state: str | None = None) -> BuildingRecord:
     overture = await resolve_building(lat, lon)
     identity = BuildingIdentity(
         record_id=stable_record_id(lat, lon, uprn if uprn_status == EvidenceStatus.verified else None), address=address, latitude=lat, longitude=lon,
