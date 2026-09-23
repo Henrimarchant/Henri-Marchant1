@@ -12,6 +12,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
-      - run: python -m compileall -q app
+      - run: python -m compileall -q app scripts
       - run: python -c "import app.main"
       - run: python -m pytest -q tests
