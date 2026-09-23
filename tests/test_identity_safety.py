@@ -66,3 +66,12 @@ def test_source_states_distinguish_failure_from_no_match():
     from app.source_status import SourceState
     assert SourceState.unavailable != SourceState.no_match
     assert SourceState.incomplete != SourceState.success
+
+
+def test_corroboration_does_not_promote_spatial_candidate():
+    import asyncio
+    from app.connectors.open_uprn import corroborate_uprn
+    candidate={"uprn":"123456789","status":EvidenceStatus.recorded,"confidence":0.85}
+    result=asyncio.run(corroborate_uprn("1 Example Road, S1 1AA",candidate))
+    assert result["status"] == EvidenceStatus.recorded
+    assert result["confidence"] == 0.85
