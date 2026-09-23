@@ -131,7 +131,8 @@ async def record(
 
             # Caller-supplied identifiers are never trusted. The official
             # OS Open UPRN dataset may verify the validated geocoder point.
-            resolved_uprn = await resolve_uprn(geocoded["lat"], geocoded["lon"])\n            resolved_uprn = await corroborate_uprn(address, resolved_uprn)
+            resolved_uprn = await resolve_uprn(geocoded["lat"], geocoded["lon"])
+            resolved_uprn = await corroborate_uprn(address, resolved_uprn)
             return await build_record(
                 address=geocoded["display_name"],
                 lat=geocoded["lat"],
