@@ -75,3 +75,20 @@ def test_corroboration_does_not_promote_spatial_candidate():
     result=asyncio.run(corroborate_uprn("1 Example Road, S1 1AA",candidate))
     assert result["status"] == EvidenceStatus.recorded
     assert result["confidence"] == 0.85
+
+
+def test_health_declares_identity_safety_guards():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    payload=TestClient(app).get("/health").json()
+    assert payload["safety"]["postcode_identity_gate"] is True
+    assert payload["safety"]["coordinate_only_enrichment"] is False
+    assert payload["safety"]["caller_uprn_trusted"] is False
+    assert payload["safety"]["spatial_uprn_auto_verified"] is False
+
+
+def test_coordinate_only_record_request_is_rejected():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    response=TestClient(app).get("/api/record",params={"lat":53.0,"lon":-1.0})
+    assert response.status_code == 422
