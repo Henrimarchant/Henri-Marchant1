@@ -60,3 +60,31 @@ async def nearby_uprns(lat: float, lon: float, limit: int = 2) -> list[dict]:
             lat, lon, MAX_VERIFY_DISTANCE_M, limit,
         )
         return [dict(row) for row in rows]
+
+
+async def nearby_uprns_result(lat: float, lon: float, limit: int = 2) -> SourceResult:
+    """Query the indexed national UPRN source without hiding infrastructure failure."""
+    if not DATABASE_URL:
+        return SourceResult(state=SourceState.incomplete, note="UPRN database is not configured.")
+    if asyncpg is None:
+        return SourceResult(state=SourceState.unavailable, note="UPRN database driver is unavailable.")
+    try:
+        records=await nearby_uprns(lat,lon,limit)
+        return SourceResult(
+            state=SourceState.success if records else SourceState.no_match,
+            records=records,
+            note=None if records else "No OS Open UPRN coordinate was found within the conservative search radius.",
+        )
+    except Exception:
+        return SourceResult(
+            state=SourceState.unavailable,
+            note="The indexed OS Open UPRN source could not be queried; this is not evidence that no UPRN exists.",
+        )
+
+
+async def close_pool():
+    """Close pooled database connections during application shutdown."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool=None
