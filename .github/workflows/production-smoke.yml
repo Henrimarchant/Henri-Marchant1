@@ -1,0 +1,32 @@
+name: production-smoke
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["tests"]
+    types: [completed]
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 75
+      - name: Health check
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 10 "https://building-record-v04-production.up.railway.app/health"
+      - name: Normanton Hall end-to-end record
+        run: |
+          python - <<'PY'
+          import json,time,urllib.parse,urllib.request
+          url="https://building-record-v04-production.up.railway.app/api/record?"+urllib.parse.urlencode({"address":"Normanton Hall, Normanton, Southwell, NG25 0PS"})
+          for attempt in range(6):
+              try:
+                  with urllib.request.urlopen(url,timeout=30) as r:
+                      body=r.read().decode()
+                      if r.status != 200: raise RuntimeError(f"HTTP {r.status}: {body[:500]}")
+                      data=json.loads(body)
+                      if not data.get("identity"): raise RuntimeError("No Building Record identity in 200 response")
+                      print("Production smoke passed",data["identity"])
+                      break
+              except Exception:
+                  if attempt==5: raise
+                  time.sleep(15)
+          PY
