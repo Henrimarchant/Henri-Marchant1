@@ -57,7 +57,7 @@ async def readiness():
     """Non-secret operational readiness for evidence infrastructure."""
     uprn = await nearby_uprns_result(53.0, -1.0, 1)
     return {
-        "status": "ready" if uprn.state.value != "unavailable" else "degraded",
+        "status": "ready" if uprn.state.value in {"success", "no_match"} else "degraded",
         "version": "0.6.0",
         "sources": {
             "uprn_index": uprn.state.value,
