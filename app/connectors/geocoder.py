@@ -4,6 +4,7 @@ import re
 import httpx
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
+PLANNING_ENTITY = "https://www.planning.data.gov.uk/entity.json"
 POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b", re.I)
 
 
@@ -55,6 +56,42 @@ async def _search(client, headers, **params):
     response=await client.get(NOMINATIM,params=base,headers=headers)
     response.raise_for_status()
     return response.json()
+
+
+async def _planning_named_building(client, identity_text: str, clat: float, clon: float) -> dict | None:
+    """Authoritative fallback for named listed buildings missing from OSM."""
+    metres=6000
+    lat_delta=metres/111320
+    lon_delta=metres/(111320*max(math.cos(math.radians(clat)),0.2))
+    west,east=clon-lon_delta,clon+lon_delta
+    south,north=clat-lat_delta,clat+lat_delta
+    geometry=f"POLYGON(({west} {south},{east} {south},{east} {north},{west} {north},{west} {south}))"
+    try:
+        r=await client.get(PLANNING_ENTITY,params=[
+            ("dataset","listed-building"),("geometry",geometry),
+            ("geometry_relation","intersects"),("limit","100")])
+        r.raise_for_status()
+        entities=[e for e in r.json().get("entities",[]) if not e.get("end-date")]
+    except Exception:
+        return None
+    wanted=_tokens(identity_text)
+    ranked=[]
+    for e in entities:
+        candidate=_tokens(str(e.get("name") or ""))
+        score=len(wanted & candidate)/max(len(wanted),1) if wanted else 0
+        point=str(e.get("point") or "")
+        m=re.search(r"POINT\\s*\\(\\s*(-?[0-9.]+)\\s+(-?[0-9.]+)\\s*\\)",point,re.I)
+        if score>=0.8 and m:
+            lon,lat=float(m.group(1)),float(m.group(2))
+            if _distance_m(clat,clon,lat,lon)<=metres:
+                ranked.append((score,e,lat,lon))
+    ranked.sort(key=lambda x:x[0],reverse=True)
+    if not ranked or (len(ranked)>1 and ranked[0][0]-ranked[1][0]<0.2):
+        return None
+    score,e,lat,lon=ranked[0]
+    return {"display_name": e.get("name") or identity_text, "lat":lat, "lon":lon,
+            "osm_type":None,"osm_id":None,"postcode":None,
+            "identity_confirmed":True,"identity_method":"authoritative-listed-building-name-match"}
 
 
 async def geocode(address: str) -> dict:
@@ -120,6 +157,12 @@ async def geocode(address: str) -> dict:
                         scored.append((name_score + max(0,1-dist/6000)*0.1,item))
                 valid=sorted(scored,key=lambda p:p[0],reverse=True)
                 method="postcode-anchored-name-match"
+                if not valid:
+                    identity_text=parts[0] if parts else query_without_postcode
+                    authoritative=await _planning_named_building(client,identity_text,clat,clon)
+                    if authoritative:
+                        authoritative["postcode"]=requested_postcode
+                        return authoritative
 
         if not valid:
             raise ValueError("Property identity could not be confirmed reliably from the supplied address.")
