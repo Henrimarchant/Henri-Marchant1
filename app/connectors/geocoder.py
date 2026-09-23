@@ -80,12 +80,25 @@ async def geocode(address: str) -> dict:
         # building elsewhere in Britain.
         method="exact-postcode-candidate"
         if not valid and requested_postcode:
-            pc=await _search(client,headers,q=requested_postcode,limit=3)
+            pc=await _search(client,headers,postalcode=requested_postcode,limit=3)
+            if not pc:
+                pc=await _search(client,headers,q=requested_postcode,limit=3)
             if pc:
                 centre=pc[0]; clat=float(centre["lat"]); clon=float(centre["lon"])
                 delta=0.03
-                local=await _search(client,headers,q=query_without_postcode,
-                    viewbox=f"{clon-delta},{clat+delta},{clon+delta},{clat-delta}",bounded=1)
+                # Try progressively simpler property-name variants. Nominatim can
+                # miss a named building when the full street/locality string is
+                # supplied as an unstructured q value.
+                variants=[]
+                for q in [query_without_postcode, query_without_postcode.split(",")[0].strip()]:
+                    if q and q not in variants:
+                        variants.append(q)
+                local=[]
+                for q in variants:
+                    local=await _search(client,headers,q=q,
+                        viewbox=f"{clon-delta},{clat+delta},{clon+delta},{clat-delta}",bounded=1)
+                    if local:
+                        break
                 scored=[]
                 for item in local:
                     dist=_distance_m(clat,clon,float(item["lat"]),float(item["lon"]))
