@@ -128,4 +128,5 @@ async def build_record(address: str, lat: float, lon: float, uprn: str | None = 
         "EPC / energy evidence","building alteration chronology"
     ] if x not in attrs]
     return BuildingRecord(identity=identity,facts=facts,constraints=constraint_facts,
-                          components=[roof],history=history,unknowns=unknowns)
+                          components=[roof],history=history,unknowns=unknowns,
+                          source_states={"planning_constraints": constraint_result.state.value})
