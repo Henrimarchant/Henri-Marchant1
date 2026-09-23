@@ -9,3 +9,13 @@ CREATE TABLE IF NOT EXISTS os_open_uprn (
 
 CREATE INDEX IF NOT EXISTS os_open_uprn_geom_gix
 ON os_open_uprn USING GIST (geom);
+
+CREATE TABLE IF NOT EXISTS dataset_versions (
+  provider text NOT NULL,
+  dataset text NOT NULL,
+  release_date date,
+  retrieved_at timestamptz NOT NULL DEFAULT now(),
+  source_reference text,
+  licence text,
+  row_count bigint NOT NULL CHECK (row_count >= 0)
+);
