@@ -161,6 +161,8 @@ async def constraints(
     lon: float,
     uprn: str | None = None,
 ) -> list[dict]:
+    # Area designations are legitimately established by point/geometry
+    # intersection. A verified UPRN is preferred where available.
     try:
         return await _entity_query(
             lat=lat,
@@ -169,8 +171,7 @@ async def constraints(
             datasets=CONSTRAINT_DATASETS,
         )
     except Exception:
-        # Never silently downgrade a failed precise UPRN lookup to a spatial
-        # lookup: that could attach a neighbouring designation to the property.
+        # Retrieval failure is not evidence of absence.
         return []
 
 
