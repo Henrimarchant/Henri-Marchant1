@@ -30,6 +30,9 @@ class Fact(BaseModel):
     status: EvidenceStatus = EvidenceStatus.unknown
     confidence: float | None = Field(default=None, ge=0, le=1)
     evidence_date: str | None = None
+    valid_from: str | None = None
+    valid_until: str | None = None
+    verified_by: str | None = None
     source: Source | None = None
     note: str | None = None
 
@@ -73,3 +76,4 @@ class BuildingRecord(BaseModel):
     components: list[Component] = Field(default_factory=list)
     history: list[Event] = Field(default_factory=list)
     unknowns: list[str] = Field(default_factory=list)
+    source_states: dict[str, str] = Field(default_factory=dict)
